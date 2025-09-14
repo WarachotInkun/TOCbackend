@@ -25,7 +25,7 @@ def getAnimeList ():
     result = re.findall(pattern, html)
     return result
 
-def animepage
+
 
 
 print(getAnimeList())
