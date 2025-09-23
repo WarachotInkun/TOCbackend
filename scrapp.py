@@ -1,14 +1,21 @@
 from bs4 import BeautifulSoup as bs
 import requests as req
 import re
-
-
 url = "https://myanimelist.net"
 listUrl = url+"/topanime.php"
 
+
 def fetch_page(url):
     try:
-        resp = req.get(url)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ( like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        }
+        resp = req.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         return resp.text
     except req.RequestException as e:
@@ -140,22 +147,25 @@ def getAminePage(animeID):
     entries = []
     for m in re.finditer(r'<div class="entry\b.*?>.*?</div>\s*</div>', related_html, flags=re.S):
         block = m.group(0)
-        m_img2x = re.search(r'data-srcset="[^"]*?(\S+)\s*2x"', block)
-        if m_img2x:
-            img_url = m_img2x.group(1)
-        else:
-            img_url = re.search(r'<img[^>]+src="([^"]+)"', block).group(1)
-        relation = re.search(r'<div class="relation">\s*([\s\S]*?)\s*</div>', block).group(1)
-        relation = " ".join(relation.split())
-        m_title = re.search(r'<div class="title">\s*<a href="([^"]+)">\s*([^<]+)\s*</a>', block)
-        link, title = m_title.group(1), m_title.group(2).strip()
-        entries.append({
-            "image": img_url.replace("r/50x70","").replace("r/100x140","").replace("1x,","").split("?")[0],
-            "relation": relation,
-            "title": title,
-            "ID": link.split("/")[4],
-            "Type": link.split("/")[3],
-        })
+        try:
+            m_img2x = re.search(r'data-srcset="[^"]*?(\S+)\s*2x"', block)
+            if m_img2x:
+                img_url = m_img2x.group(1)
+            else:
+                img_url = re.search(r'<img[^>]+src="([^"]+)"', block).group(1)
+            relation = re.search(r'<div class="relation">\s*([\s\S]*?)\s*</div>', block).group(1)
+            relation = " ".join(relation.split())
+            m_title = re.search(r'<div class="title">\s*<a href="([^"]+)">\s*([^<]+)\s*</a>', block)
+            link, title = m_title.group(1), m_title.group(2).strip()
+            entries.append({
+                "image": img_url.replace("r/50x70","").replace("r/100x140","").replace("1x,","").split("?")[0],
+                "relation": relation,
+                "title": title,
+                "ID": link.split("/")[4],
+                "Type": link.split("/")[3],
+            })
+        except:
+            continue
     json["related"] = entries
 
     voiceActors_match = re.search(r'<h2 id="characters">Characters & Voice Actors</h2>(.*?)<a name="staff"', html, re.DOTALL)
@@ -170,8 +180,14 @@ def getAminePage(animeID):
         role_match = re.search(r'<small>([^<]+)</small>', row[1])
         role = role_match.group(1).strip() if role_match else None
 
-        va_img_match = re.search(r'<img\b[^>]*(?:data-src|src)="([^"]+)"', row[3])
-        va_name_match = re.search(r'<td class="[^"]*?">\s*<a href="[^"]+">([^<]+)</a>', row[2])
+        try:
+            va_img_match = re.search(r'<img\b[^>]*(?:data-src|src)="([^"]+)"', row[3])
+        except IndexError:
+            va_img_match = None
+        try:
+            va_name_match = re.search(r'<td class="[^"]*?">\s*<a href="[^"]+">([^<]+)</a>', row[2])
+        except IndexError:
+            va_name_match = None
         char_img = char_img_match.group(1).replace("r/50x70/","").replace("r/42x62/","").split("?")[0] if char_img_match else None
         char_name = char_name_match.group(1).strip() if char_name_match else None
         va_img = va_img_match.group(1).replace("r/50x70/","").replace("r/42x62/","").split("?")[0] if va_img_match else None
@@ -195,4 +211,61 @@ def getAminePage(animeID):
 
 
 
+def search_anime(keyword):
+    """ ค้นหาอนิเมะจาก MyAnimeList ตามคำค้น
+        * keyword: คำค้น (string)
+        * return: json ของผลการค้นหา หรือ None ถ้าไม่พบ
+    """
+    json = {"categories": [{"type": "anime", "items": []}]}
+    link = f"https://myanimelist.net/anime.php?cat=anime&q={keyword}&type=0&score=0&status=0&p=0&r=0&sm=0&sd=0&sy=0&em=0&ed=0&ey=0&c%5B%5D=a&c%5B%5D=b&c%5B%5D=c&c%5B%5D=f"
     
+    html = fetch_page(link)
+    if html is None:
+        return json
+    
+    anime_links = re.findall(r'href="https://myanimelist\.net/anime/(\d+)/[^"]*"', html)
+    image_urls = re.findall(r'(?:data-src|src)="([^"]*myanimelist\.net[^"]*images/anime[^"]*)"', html)
+    titles = re.findall(r'<strong>([^<]+)</strong>', html)
+    media_types = re.findall(r'<td[^>]*width="45"[^>]*>\s*([^<]+)\s*</td>', html)
+    scores = re.findall(r'<td[^>]*width="50"[^>]*>\s*([\d\.]+)\s*</td>', html) 
+    ep = re.findall(r'<td[^>]*width="40"[^>]*>\s*([\d\.]+)\s*</td>', html) 
+    for i in range(min(5, len(anime_links), len(titles), len(image_urls))):
+        try:
+            episode = int(ep[i])
+        except (ValueError, IndexError):
+            episode = 0
+        anime_item = {
+            "id": int(anime_links[i]),
+            "type": "anime",
+            "name": titles[i].strip(),
+            "image_url": image_urls[i].replace("r/50x70/", "").replace("r/100x140/", "").split("?")[0],
+            "payload": {
+                "media_type": media_types[i].strip() if i < len(media_types) else "Unknown",
+                "score": scores[i] if i < len(scores) else "N/A",
+                "status": f"{episode} episodes" if episode >1 else (f"{episode} episode" if episode==1 else "Unknown")
+            }
+        }
+        json["categories"][0]["items"].append(anime_item)
+    
+    return json
+
+
+def get_all_anime_data():
+    """ดึงชื่ออนิเมะจาก 10 หน้าแรกของ MyAnimeList top anime
+    * return: list ของชื่ออนิเมะ
+    """
+    all_names = []
+    
+    for page in range(1, 11):  # หน้า 1-10
+        print(f"Fetching page {page}...")
+        anime_list = getAnimeList(page)
+        
+        if anime_list and anime_list.get("data"):
+            for anime in anime_list["data"]:
+                all_names.append(anime.get("name"))
+        else:
+            print(f"No data found for page {page}")
+    
+    print(f"Total anime names collected: {len(all_names)}")
+    return all_names
+

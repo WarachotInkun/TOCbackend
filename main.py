@@ -1,19 +1,23 @@
 import requests
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 import scrapp
-from fastapi import Query
-import requests
-
-
-
+import os
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # allow all domains
+    allow_credentials=True,
+    allow_methods=["*"],  # allow all HTTP methods
+    allow_headers=["*"],  # allow all headers
+)
 
 @app.get("/v1/health")
 def health():
     return "ok"
-
 
 
 @app.get("/v1/animes")
@@ -28,12 +32,23 @@ def fetch_page(id: int):
 
 @app.get("/v1/search")
 def search_anime(keyword: str):
-    url = f"https://myanimelist.net/search/prefix.json?type=anime&keyword={keyword}&v=1"
-    resp = requests.get(url)
-    json = resp.json()
+    return scrapp.search_anime(keyword)
 
-    for i in json['categories'][0]['items']:
-        i["image_url"] = i["image_url"].replace("r/116x180/","").split("?")[0]
-        i.pop("thumbnail_url", None)
-        i.pop("url", None)
-    return json     
+
+
+@app.get("/v1/csv")
+def export_csv():
+    import pandas as pd
+    data = scrapp.get_all_anime_data()
+    df = pd.DataFrame({"anime_name": data})
+    filename = 'anime_data.csv'
+    df.to_csv(filename, index=False)
+    return FileResponse(
+        path=filename,
+        filename=filename,
+        media_type='text/csv',
+        headers={"Content-Disposition": "attachment; filename=anime_data.csv"}
+    )
+    
+
+
