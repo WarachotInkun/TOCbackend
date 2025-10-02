@@ -38,7 +38,7 @@ def getAnimeList (page=1):
         try:
             json["data"].append({
                 "ID": item[0].split("/")[4],
-                "name": item[1].replace('\n', ' ').strip(),
+                "name": item[1].replace('\n', ' ').replace('&amp;#039;', "'").strip(),
                 "img": item[2].replace("r/50x70","").split("?")[0],
                 "score": float(item[3])
             })
@@ -65,7 +65,7 @@ def getAminePage(animeID):
     html = fetch_page(link)
     namePattern = r'<h1[^>]*class="title-name h1_bold_none"[^>]*>.*?<strong>([^<]+)</strong>'
     name = re.findall(namePattern, html, re.DOTALL)[0]
-    json["name"] = name.strip()
+    json["name"] = name.replace('&#039;', "'").strip()
     imgPlattern = r'<div[^>]*class="leftside"[^>]*>.*?<img[^>]*src="([^"]+)"'
     img = re.findall(imgPlattern, html, re.DOTALL)[0]
     json["leftside"] = {"image":img}
