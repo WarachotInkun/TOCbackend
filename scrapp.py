@@ -250,22 +250,73 @@ def search_anime(keyword):
     return json
 
 
+def getAnimeData(page):
+    link = listUrl + f"?limit={(page-1)*50}"
+    resp_text = fetch_page(link)
+    if not resp_text:
+        return None
+    pattern = r'<a[^>]*class="hoverinfo_trigger[^"]*"[^>]*href="([^"]+)"[^>]*>.*?<img[^>]*alt="Anime: ([^"]+)"[^>]*"[^>]*>.*?</a>.*?<span class="text on score-label score-[^"]+">([\d.]+)</span>'
+    matches = re.findall(pattern, resp_text, re.DOTALL)
+    if not matches:
+        return None
+    anime_names = []
+    anime_scores = []
+    anime_types = []
+    anime_episodes = []
+    anime_aired = []
+    anime_studios = []
+    anime_premiered = []
+    for match in matches:
+        url = match[0]
+        info = GetAnimeInfo(url)
+        if not info:
+            continue
+        anime_names.append(match[1].replace('&amp;#039;', "'"))
+        anime_scores.append(match[2])
+        anime_types.append(info.get("type", "N/A"))
+        anime_episodes.append(info.get("episodes", "N/A"))
+        anime_aired.append(info.get("aired", "N/A"))
+        anime_studios.append(info.get("studios", "N/A"))
+        anime_premiered.append(info.get("premiered", "N/A"))
+    return (anime_names, anime_scores, anime_types, anime_episodes, anime_aired, anime_studios, anime_premiered)
+
+def GetAnimeInfo(anime_url):
+    resp_text = fetch_page(anime_url)
+    if not resp_text:
+        return None
+    try:
+        leftside_div = re.findall(r'<div[^>]*class="leftside"[^>]*>(.*?)Resources', resp_text, re.DOTALL)[0]
+        leftside_html = leftside_div if leftside_div else ''
+        aired_match = re.search(r'Aired:</span>\s*([^<]+)</div>', leftside_html)
+        studios_match = re.search(r'Studios:</span>\s*<a[^>]*>([^<]+)</a>', leftside_html)
+        premiered_match = re.search(r'Premiered:</span>\s*<a[^>]*>([^<]+)</a>', leftside_html)
+        type_match = re.search(r'Type:</span>\s*<a[^>]*>([^<]+)</a>', leftside_html)
+        episodes_match = re.search(r'Episodes:</span>\s*([\d]+)', leftside_html)
+    except IndexError:
+        print(f"Error parsing leftside div for URL: {anime_url}")
+        return None
+    return {
+        "type": type_match.group(1).strip() if type_match else "N/A",
+        "episodes": episodes_match.group(1).strip() if episodes_match else "N/A",
+        "aired": aired_match.group(1).strip() if aired_match else "N/A",
+        "studios": studios_match.group(1).strip() if studios_match else "N/A",
+        "premiered": premiered_match.group(1).strip() if premiered_match else "N/A"
+    }
+
 def get_all_anime_data():
     """ดึงชื่ออนิเมะจาก 10 หน้าแรกของ MyAnimeList top anime
     * return: list ของชื่ออนิเมะ
     """
-    all_names = []
+    lists = ([],[],[],[],[],[],[])
     
-    for page in range(1, 11):  # หน้า 1-10
-        print(f"Fetching page {page}...")
-        anime_list = getAnimeList(page)
-        
-        if anime_list and anime_list.get("data"):
-            for anime in anime_list["data"]:
-                all_names.append(anime.get("name"))
+    for i in range(1, 11):
+        print(f"Fetching page {i}...")
+        data = getAnimeData(i)
+        if data:
+            for j in range(len(lists)):
+                lists[j].extend(data[j])
         else:
-            print(f"No data found for page {page}")
-    
-    print(f"Total anime names collected: {len(all_names)}")
-    return all_names
+            print(f"No data found for page {i}")
+
+    return lists
 

@@ -40,7 +40,15 @@ def search_anime(keyword: str):
 def export_csv():
     import pandas as pd
     data = scrapp.get_all_anime_data()
-    df = pd.DataFrame({"anime_name": data})
+    df = pd.DataFrame({
+        "Name": data[0],
+        "Score": data[1],
+        "Type": data[2],
+        "Episodes": data[3],
+        "Aired": data[4],
+        "Studios": data[5],
+        "Premiered": data[6]
+})
     filename = 'anime_data.csv'
     df.to_csv(filename, index=False)
     return FileResponse(
